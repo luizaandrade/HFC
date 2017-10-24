@@ -27,7 +27,6 @@
 	set seed 1320134201
 
 
-
 	clear 
 	clear matrix
 	clear mata
@@ -51,20 +50,25 @@
 	*--------------
 	* Set filepaths
 	*--------------
-	global project 			"$dropbox\Rwanda Feeder Roads"
-	global data				"$project\data"
-	global fu2_eu			"$data\surveys\HH survey\EU follow up 2 sept 2017"
-	global fu2_eu_raw		"$fu2_eu\data\raw"
-	global fu2_logbooks		"$fu2_eu\logbooks"
-	global fu2_eu_do		"$data\dofiles\hh_survey\EU follow up 2 sept 2017"
-	global fu2_eu_output	"$fu2_eu\output"
-	global fu2_eu_preload	"$fu2_eu\Preloads"
+	global project 			"$dropbox/Rwanda Feeder Roads"
+	global data				"$project/data"
+	global fu2_eu			"$data/surveys/HH survey/EU follow up 2 sept 2017"
+	global fu2_eu_raw		"$fu2_eu/data/raw"
+	global fu2_logbooks		"$fu2_eu/logbooks"
+	global fu2_eu_do		"$data/dofiles/hh_survey/EU follow up 2 sept 2017"
+	global fu2_eu_output	"$fu2_eu/output"
+	global fu2_eu_preload	"$fu2_eu/Preloads"
+	global fu2_eu_bc		"$fu2_eu/Preloads/Back Checks"
+	global fu2_eu_scto		"$data/urvey CTO/Stata"
+
 	
 	
 *********************************************************************************
 * 1.	Section switches															*
 *********************************************************************************
-	global import_clean			0 // Import the raw csv and clean
+	global import_clean			0 // Import the raw csv
+	global import_bc			0 // Import the raw csv for backcheck survey
+
 	global high_freq_check		0 // Run the high frequency checks
 	global select_bc_hh			0 // Randomly select HHs for backchecking
 	
@@ -80,11 +84,19 @@
 *********************************************************************************	
 
 	*------------------------------
-	* Import the raw data and clean
+	* Import the raw data from csvs
 	*------------------------------
 	if $import_clean {
-		do "$fu2_eu_do\import_clean.do"
+		do "$fu2_eu_scto/import_RFR_FU2_EU_v1.9.do"
 	}
+	
+	*------------------------------
+	* Import the raw data from csvs backchecks
+	*------------------------------
+	if $import_bc {
+		do "$fu2_eu_scto/import_RFR_FU2_EU_v1.9.do"
+	}
+	
 	
 	*----------------------------------
 	* Run the high frequency data check
@@ -93,9 +105,17 @@
 		do "$fu2_eu_do\high_freq_data_check.do"
 	}
 
+	
+	*----------------------------------
+	* Run the high frequency fo BC
+	*----------------------------------
+	if $high_freq_check {
+		do "$fu2_eu_do\high_freq_data_check_bc.do"
+	}
+	
 	*-------------------------------------
 	* Randomly select HHs for backchecking
 	*-------------------------------------
 	if $select_bc_hh {
-		do "$fu2_eu_do\select_bc_hh.do"
+		do "$fu2_eu_do\select_backchecks.do"
 	}

@@ -6,20 +6,131 @@
 		* DO SOMETHING ABOUT MULTIPLE LOGBOOKS !!!
 		* EXPORT SOMTHING IF DUPLICATE IN THE LOGBOOK
 
-*-------------------------------------------------------------------------------
-* 0. Load RAW data
-*-------------------------------------------------------------------------------		
-		
+********************************************************************************
+* PART 1. Load RAW data
+********************************************************************************		
+	
+	**** Load data from the first version (1.6) of the from 
 	use "$fu2_eu_raw/RFR_FU2_EU_v1.6.dta", clear
 	
+	**** Add Raw data from form version 1.9
+	merge 1:1 id_05 using "$fu2_eu_raw/RFR_FU2_EU_v1.9.dta", gen(duplic_versions)
+	
+	tab duplic_versions
+	
+	drop duplic_versions
+	
+	**** Drop not finished/non-consensual interviews
+	drop if consent == 0
 	
 	**** Minor fixes
 	
-	destring id_05 id_05_reenter, replace
+	* Duration variable
+	gen 	duration = (endtime - starttime)/60000
+	replace duration = . if duration > 5*3600
+	lab var duration "Average survey duration (min)"
+	
+	* HHid as number
+	destring id_05, gen(hhid)
+	
+	encode pl_id_06, gen(village_id)
+	encode pl_id_09, gen(sector_id)
+	encode pl_id_09, gen(district_id)
+	
+
+********************************************************************************
+* PART 0.1: Set options
+********************************************************************************
+
+	* Identify unique ID
+	global hhVar 	hhid	// household ID
+	
+	* Define date variable
+	local dateVar	submissiondate
+	
+	* Identify team	
+	global teamVar 			id_04 
+	global enumeratorVar	id_03
+	global teamLeaderVar	id_04
+	global villageVar		village_id
+	global sectorVar		sector_id
+	
+	* Identify percentiles
+	global lowerPctile 	20
+	global upperPctile	80
+	
+	global villageGoal 15
 		
-*-------------------------------------------------------------------------------
+	* Define duration variables to be checked:
+	global durationList	duration
+	* Don't forget to label
+	
+
+	**** Inputs
+	levelsof ${teamVar}, local(teamsList)
+	global teamsList = "`teamsList'"
+	
+	* Identify last submission date
+	qui sum $dateVar
+	global lastDay = r(max)
+	
+
+	**** Observation goals
+	gen village_id_goal = 15
+	
+	gen district_id_goal = .	
+	replace district_id_goal = 240 if pl_id_09 == "BUGESERA"
+	replace district_id_goal = 238 if pl_id_09 == "HUYE"
+	replace district_id_goal = 80  if pl_id_09 == "MUHANGA"
+	replace district_id_goal = 279 if pl_id_09 == "NGOMA"
+	replace district_id_goal = 274 if pl_id_09 == "NGORORERO"
+	replace district_id_goal = 240 if pl_id_09 == "RULINDO"
+	replace district_id_goal = 680 if pl_id_09 == "RUBAVU"	
+
+	* Identify unique ID
+	global hhVar 	hhid	// household ID
+	
+	* Define date variable
+	global dateVar			submissiondate
+	global startVar			starttime
+	global endVar			endtime
+	global keyVar			key
+	
+	* Identify consent variable
+	global consentVar		consent
+	global consentYesVar	consent_yes
+	
+	* Identify complete survey variable
+	global completeVar		complete
+	
+	* Identify team	
+	global teamVar 			id_04 
+	global enumeratorVar	id_03
+	global teamLeaderVar	id_04
+	global progressVars		"village_id district_id"
+	
+	* Survey variables
+	global hhRoster1		ros_
+	global hhRoster2		b_
+	global plotRoster		c_
+	global cropRoster		d_
+	global incomeSec		e_
+	global questionVars		"${hhRoster1}* ${hhRoster2}* ${plotRoster}* ${cropRoster}* ${incomeSec}*"
+	global sectionsList		hhRoster1 hhRoster2 plotRoster cropRoster incomeSec
+	
+	* Identify percentiles
+	global lowerPctile 	20
+	global upperPctile	80
+	
+	* Identify codes
+	global dkCode	-88
+	global refCode	-66
+	
+	
+		
+********************************************************************************
 * 1. Check against the logbook
-*-------------------------------------------------------------------------------
+********************************************************************************
 
 	local logbook_date 
 
@@ -28,15 +139,40 @@
 	
 	preserve
 	
-		import excel using "$fu2_logbooks/Logbook of 15th Oct 2017.xlsx", firstrow clear
+		import excel using "$fu2_logbooks/Logbook.22nd Oct 2017.xlsx", firstrow clear
+//		import excel using "$fu2_logbooks/Logbook.20th Oct 2017.xlsx", firstrow clear	
+	
+//		import excel using "$fu2_logbooks/Logbook.16th Oct 2017.xlsx", firstrow clear
+//		import excel using "$fu2_logbooks/Logbook of 15th Oct 2017.xlsx", firstrow clear
+
+		
+		**** Fix if Date is string from Excel
+		capture confirm numeric variable Date
+        if _rc {
+			split Date, parse("/") gen(Date_num)
+
+			destring Date_num1, replace
+			destring Date_num2, replace
+			destring Date_num3, replace
+			
+			gen Date_num = mdy(Date_num1,Date_num2,Date_num3)
+			drop Date
+			rename Date_num Date
+			
+			drop Date_num*
+			format 	Date %tdnn/dd/CCYY
+		}
 		
 		
-		drop if Date==. //Check this out !!!
+			drop if Date == .
+			
+
+		
 		
 # delimit ;
 		rename (headid 
 				interviewcompletedANDsentto 
-				Reason1Permanentlymovedaway 
+				IfnotWhy
 				HHreplaced 
 				HHcodelinkedtoreplacement 
 				HHcodelinkedtoduplicate 
@@ -47,7 +183,7 @@
 				backcheckcorrectionsmadetosu
 				id_11	id_12	id_13	id_14	id_09	id_08	id_07	id_06) 
 		   
-				(id_05 
+				(hhid 
 				complete 
 				reason 
 				replaced 
@@ -62,7 +198,7 @@
 
 # delimit cr				
 				
-		label var id_05 	"HH ID"
+		label var hhid	 	"HH ID"
 		label var pl_id_06  "Village"
 		label var pl_id_07  "Cell"
 		label var pl_id_08  "Sector"
@@ -80,8 +216,9 @@
 		
 		
 		* Make sure all HH ID is unique in the logbook
-		duplicates tag id_05, gen(duplicate)
-		assert duplicate == 0 
+		duplicates tag hhid, gen(duplicate)
+		//assert duplicate == 0 
+		drop if duplicate == 1
 		drop duplicate
 	
 		* Number of logged intervews
@@ -91,48 +228,49 @@
 		tempfile logbook
 		save `logbook'
 
+		
+		
+		**** Gen number of hh per sector
+		
 	restore
 
 	
 	**** Merge logbook and server
-	merge 1:1 id_05 using `logbook', gen(match_b)
+	merge 1:1 hhid using `logbook', gen(match_b)
 	
 	label define matched_log  1  "Server only" 2 "Logbook only" 3 "Both"
 	
 	label values match_b matched_log
 	
 	tab match_b
-	
-	//webdoc do "$fu2_eu_output/high_freq_check/teste.html"
 
-	* Keep track of HHs which is surveyed but not in the logbook (_merge == -1) 
-	//tab _merge, gen(mismatch)  
-//	label mismatch1 "Surveyed but not in the logbook"
-//	label variable mismatch1 "Server only"
-//	label variable mismatch2 "Logbook only"
-//	drop mismatch3
+********************************************************************************
+**** Merge fixes 
+	
+	**** Date fixes
+	
+	gen 	server_date = dofc( submissiondate )
+	format 	server_date %tdnn/dd/CCYY
+	
+	**** Get dates for interviews not in the logbook
+	replace Date = server_date if Date==.
+	
+
+	
+	
+********************************************************************************
+* EXPORTS
+********************************************************************************
 	
 	**** Matching issues table
 	preserve
 		* Keep only the first columns to make it simpler 
-		keep Date match_b simid devicephonenum text_audit id_03 start_mod_a id_04 id_05 id_05_reenter pl_id_06 pl_sample pl_id_07 pl_id_08 pl_id_09	pl_id_11 pl_id_12 pl_hhhs pl_hhhs_id pl_hhsize pl_id_13 pl_id_14
+		keep Date match_b simid devicephonenum text_audit id_03 start_mod_a id_04 hhid id_05_reenter pl_id_06 pl_sample pl_id_07 pl_id_08 pl_id_09	pl_id_11 pl_id_12 pl_hhhs pl_hhhs_id pl_hhsize pl_id_13 pl_id_14
 		keep if (match_b == 1 | match_b == 2)
 		order match_b
 		export delimited "$fu2_eu_output\high_freq_check\duplicates\mismatch_list_`c(current_date)'", replace
-		export delimited "$fu2_eu_output\high_freq_check\duplicates\mismatch_list_most_recent'", replace
+		export delimited "$fu2_eu_output\high_freq_check\duplicates\mismatch_list_most_recent", replace
 	restore
-	
-	**** Check duplicates
-	duplicates tag id_05, gen(duplicate)
-	assert duplicate == 0 
-	tab duplicate
-	
-	**** Show how many duplicates daily in a graph
-	
-	if	duplicate > 0 {
-		hist duplicate, freq ytitle("Number of HHs") xtitle("Number of duplicates") title("Frequency of duplicates") note(`c(current_date)' `c(current_time)')
-		graph export "$fu2_eu_output\high_freq_check\duplicates\duplicates_numbers.png", replace
- 
 	
 	
 	**** Graph comparing server with logbook
@@ -148,11 +286,28 @@
 		
 		collapse (sum) in_log in_serv, by(Date)
 		
-		twoway (connected in_log in_serv Date)
+		twoway (connected in_log in_serv Date),									///
+				graphregion(color(white))										///
+				ytitle("Number of obs.")
 	
-		graph export "$fu2_eu_output\high_freq_check\logbook_vs_server.png", replace
+		graph export "$fu2_eu_output/high_freq_check/logbook_vs_server.png", replace
 
 	restore
+	
+	
+	**** Check duplicates
+	duplicates tag hhid, gen(duplicate)
+	assert duplicate == 0 
+	tab duplicate
+	
+	**** Show how many duplicates daily in a graph
+	
+	if	duplicate > 0 {
+		hist duplicate, freq ytitle("Number of HHs") xtitle("Number of duplicates") title("Frequency of duplicates") note(`c(current_date)' `c(current_time)')
+		graph export "$fu2_eu_output\high_freq_check\duplicates\duplicates_numbers.png", replace
+ 
+	
+
 
 	**** Spit out a list of HH that are duplicated
 	preserve
@@ -167,30 +322,321 @@
 		di "No duplicates"
 	}
 	
+********************************************************************************
+* PART 2: Number of surveys completed by enumerator
+********************************************************************************
+
+	preserve
+		
+		* Calculate number of surveys per enumerator and identify lower and upper
+		* percentiles
+		* ----------------------------------------------------------------------
+		tempfile submissions
+		
+			* Count number of surveys submitted
+			collapse (count) count = $hhVar, by($enumeratorVar $teamVar)
+			sum count
+
+			* Identify enumerators in critical percentiles
+			centile count, centile($lowerPctile $upperPctile)
+			
+			gen 	flag_bottom = 1 if count < `r(c_1)'
+			gen 	flag_top = 1 	if count > `r(c_2)'
+			
+			* Order enumerators (so plot looks nice)
+			sort 	$teamVar count
+			by 		$teamVar: gen order = _n
+			
+			
+		save `submissions'
+		
+		* Plot number of surveys per enumerator, save one plot per team
+		* -------------------------------------------------------------
+		qui levelsof ${teamVar}, local(teamsList)
+		foreach team of global teamsList {
+		
+			* Load team's data
+			use `submissions', clear
+			keep if $teamVar == `team'
+			
+			describe
+			if r(N) > 0 {
+			
+			* Order variable will now be a factor labeled with enumerator's name
+			decode ${enumeratorVar}, gen(enumeratorName)
+			labmask order, val(enumeratorName)
+			
+			* Calculate number of valid observations
+			qui count if count != .
+			
+			* Create graph
+			twoway 	(bar count order if $teamVar == `team' & flag_bottom == 1, color(orange) horizontal barwidth(.8)) ///
+					(bar count order if $teamVar == `team' & flag_bottom != 1 & flag_top!= 1, color(stone) horizontal barwidth(.8)) ///
+					(bar count order if $teamVar == `team' & flag_top == 1,	color(ebblue) horizontal barwidth(.8)), ///
+					legend(off) ///
+					ylabel(1/`r(N)',valuelabel angle(0)) ///
+					xtitle(Number of surveys submitted) ///
+					graphregion(color(white)) ///
+					ytitle("")
+					
+			* Export graph
+			graph export "$fu2_eu_output/high_freq_check/team`team'_hhid_count_total.png", width(5000) replace
+					
+			}
+		}
+	restore 
 	
-	**** Graph comparing server with logbook
 	
-//	egen day_count_serv =count(_n), by(Date)
+********************************************************************************
+* PART 3: Number of surveys completed by village
+********************************************************************************
+
+	levelsof pl_id_09, local(uniqDistc)
 	
-//	twoway (connected day_count_serv day_count_log Date)
+	foreach varDistc in `uniqDistc' {
+
+		preserve
+			
+			* Count number of surveys completed
+			collapse 	(sum) count = $completeVar ///
+						(mean) village_id_goal	///
+						if pl_id_09 == "`varDistc'" & match_b == 3, ///
+						by(village_id)
+			
+			qui sum village_id_goal
+			local maxValue = r(max)
+			local interval = floor(`maxValue'/5)
+			
+			sort village_id
+			gen order = _n
+			gen order1 = order -.4
+			gen order2 = order +.4
+			decode village_id, gen(label)
+			labmask order, val(label)
+			
+			centile count, centile($lowerPctile $upperPctile)			
+			gen 	flag_bottom = 1 if count < `r(c_1)'
+			
+			twoway 	(bar count order if flag_bottom == 1, color(red) horizontal barwidth(.8)) ///
+					(bar count order if count, color(stone) horizontal barwidth(.8)) ///
+					(bar count order if count == village_id_goal, color("102 194 164") horizontal barwidth(.8)) ///
+					(pcarrow order1 village_id_goal order2 village_id_goal, lcolor("0 88 66") lpattern(dash) msize(zero) mcolor("0 88 66")), ///
+					title("`varDistc' - Village progress") ///
+					ylabel(1/`r(N)',valuelabel angle(0) labsize(vsmall)) ///
+					xlabel(0(`interval')`maxValue') ///
+					ytitle("") legend(off) ///
+					xtitle(Number of observations) ///
+					graphregion(color(white))
+						
+				* Export graph
+				graph export "$fu2_eu_output/high_freq_check/obs_per_village_`varDistc'.png", width(5000) replace
+				
+		restore 
+	}
 	
-//	graph export "$fu2_eu_output\high_freq_check\logbook_vs_server.png", replace
+********************************************************************************
+* PART 4: Number of surveys completed by district
+********************************************************************************
 	
-	* keep running tab of number of HHs replaced (could be moved, deceased, refused) by village and by enumerator
+	
 
 	
-		**** Week variable
-		//g week=ceil((starttime-svystart)/7)
-		//assert week!=.
-		//su week
+
 	
-*------------------
-* 2. Check missings for whole modules
-*------------------	
-/*	
+	preserve
+			
+			* Count number of surveys completed
+			collapse 	(sum) count = complete ///
+						(mean) district_id_goal ///
+						if match_b == 3, ///
+						by(district_id)
+			
+			qui sum district_id_goal
+			local maxValue = r(max)
+			local interval = floor(`maxValue'/5)
+			
+			sort district_id
+			gen order = _n
+			gen order1 = order -.4
+			gen order2 = order +.4
+			decode district_id, gen(label)
+			labmask order, val(label)
+			
+			centile count, centile($lowerPctile $upperPctile)			
+			gen 	flag_bottom = 1 if count < `r(c_1)'
+			
+			twoway 	(bar count order if flag_bottom == 1, color(red) horizontal barwidth(.8)) ///
+					(bar count order if count, color(stone) horizontal barwidth(.8)) ///
+					(bar count order if count == district_id_goal, color("102 194 164") horizontal barwidth(.8)) ///
+					(pcarrow order1 district_id_goal order2 district_id_goal, lcolor("0 88 66") lpattern(dash) msize(zero) mcolor("0 88 66")), ///
+					ylabel(1/`r(N)',valuelabel angle(0) labsize(vsmall)) ///
+					xlabel(0(`interval')`maxValue') ///
+					ytitle("") legend(off) ///
+					xtitle(Number of observations) ///
+					graphregion(color(white))
+						
+				* Export graph
+				graph export "$fu2_eu_output/high_freq_check/obs_District.png", width(5000) replace
+				
+	restore 
+
+	
+********************************************************************************
+* PART 5: Average survey duration by enumerator
+********************************************************************************
+	
+	* Loop over selected duration variables
+	
+	foreach durationVar in $durationList {
+	
+		di "`durationVar'"
+	
+		local durationVarLabel: var label `durationVar'
+		
+		preserve
+			
+			tempfile duration
+			
+				* Calculate average
+				collapse (mean) mean = `durationVar' ///
+						 (sd) 	sd 	 = `durationVar', ///
+						 by		($enumeratorVar $teamVar)
+				
+				* Calculate confidence interval
+				gen upper = mean + sd
+				gen lower = mean - sd
+				
+				* Identify enumerators in critical percentiles
+				centile mean, centile($lowerPctile $upperPctile)	
+				
+				gen flag_bottom = 1 	if mean < `r(c_1)'
+				gen flag_top = 1 		if mean > `r(c_2)'
+				
+				* Order enumerators (so plot looks nice)
+				sort 	$teamVar mean
+				by 		$teamVar: gen order = _n
+				
+			save `duration'
+			
+		* Plot average duration per enumerator, save one plot per team
+		* -------------------------------------------------------------
+		foreach team of global teamsList {
+		
+			* Load team's data
+			use 	`duration', clear
+			keep if $teamVar == `team'
+			
+			decode ${enumeratorVar}, gen(enumeratorName)
+			labmask order, val(enumeratorName)
+			
+			* Calculate number of valid observations
+			qui count if mean != .
+		
+			* Create graph
+			twoway 	(bar mean order if $teamVar == `team' & flag_bottom == 1, color(orange) barwidth(.8) horizontal) ///
+					(bar mean order if $teamVar == `team' & flag_bottom != 1 & flag_top!= 1, color(stone) barwidth(.8) horizontal) ///
+					(bar mean order if $teamVar == `team' & flag_top == 1, color(ebblue) barwidth(.8) horizontal), ///
+					legen(off) ///
+					ylabel(1/`r(N)',valuelabel angle(0)) ///
+					xtitle(`durationVarLabel') ///
+					ytitle("") ///
+					graphregion(color(white))
+					
+			* Export graph
+			graph export "$fu2_eu_output/high_freq_check/team`team'_`durationVar'.png", width(5000) replace
+		}
+		}
+			
+		restore
+
+		
+		
+********************************************************************************
+* PART 6: Share of don't knows and refusals
+********************************************************************************
+
+	preserve
+	
+		*keep if $dateVar == $lastDay
+		keep if $consentVar == 1
+		keep $questionVars $enumeratorVar $teamVar
+		ds, has(type numeric)
+		keep `r(varlist)' $enumeratorVar $teamVar
+		
+		egen varCount = rownonmiss(_all)
+		egen dkCount = anycount(_all), values($dkCode)
+		egen refCount = anycount(_all), values($refCode)
+		gen dkShare = (dkCount/varCount)*100
+		gen refShare = (refCount/varCount)*100
+		
+		collapse (mean) meandk = dkShare meanref = refShare ///
+				 (sd) 	sddk = dkShare sdref = refShare, ///
+				 by		($enumeratorVar $teamVar)
+				 
+		
+		foreach missType in dk ref {
+		
+			* Calculate confidence interval
+			gen upper`missType' = mean`missType' + sd`missType'
+			gen lower`missType' = mean`missType' - sd`missType'
+			
+			* Identify enumerators in critical percentiles
+			centile mean`missType', centile($lowerPctile $upperPctile)	
+			
+			gen flag_bottom`missType' = 1 	if mean`missType' < `r(c_1)'
+			gen flag_top`missType' = 1 		if mean`missType' > `r(c_2)'
+			
+		}
+
+		* Order enumerators (so plot looks nice)
+		sort 	$teamVar $enumeratorVar
+		by 		$teamVar: gen order = _n
+		
+		tempfile	temp
+		save		`temp'
+			
+		* Plot average duration per enumerator, save one plot per team
+		* -------------------------------------------------------------
+		foreach team of global teamsList {
+			
+				* Load team's data
+				use 	`temp', clear
+				keep if $teamVar == `team'
+				
+				* Order variable will now be a factor labeled with enumerator's name
+				decode ${enumeratorVar}, gen(enumeratorName)
+				labmask order, val(enumeratorName)
+				
+				foreach missType in dk ref {
+			
+				if "`missType'" == "dk"	 	local label don't know answers
+				if "`missType'" == "ref"	local label refusals to answer
+				
+					* Calculate number of valid observations
+					qui count if mean`missType' != .
+				
+					* Create graph
+					twoway 	(bar mean`missType' order if flag_bottom`missType' == 1, color(orange) horizontal) ///
+							(bar mean`missType' order if flag_bottom`missType' != 1 & flag_top`missType'!= 1, color(stone) horizontal) ///
+							(bar mean`missType' order if flag_top`missType' == 1, color(ebblue) horizontal), ///
+							legen(off) ylabel(1/`r(N)', valuelabel labsize(small) angle(0)) yscale(range(0)) ///
+							title("Team `team' - Share of `label' per enumerator", size(medium)) ///
+							ytitle("") ///
+							xtitle("Percentage of total questions") ///
+							graphregion(color(white))
+							
+					* Export graph
+					graph export "$fu2_eu_output/high_freq_check/team`team'_`missType'.png", width(5000) replace
+			}
+		}			
+	
+	restore		
+********************************************************************************
+* 5. Check missings for whole modules
+********************************************************************************/*	
 	* All observations are missings (there is a comand for that)
 	* missings tag (number od missings) - gen a variable to see if == to N
-	
+/*	
 	qui nmissing, min(*)	
 	tempname 	all_missings
 	cap file close 	`all_missings'	
