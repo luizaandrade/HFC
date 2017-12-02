@@ -12,7 +12,99 @@
 
 	** Last time modified: Oct 2017
 
+********************************************************************************
+*	PART 1: Share of variables with all missing observations per section
+*******************************************************************************/
+	 
+	if $dup_times {
+	
+		preserve
+			
+			**** Check if submissiondate is a date variable
+			**** Check if submissiondate is td
+			**** gen start_year = year(td_date)
+			**** gen start_month = month(td_date)
+		
+			keep if 	!inlist(start_year,${surveyYears}) | ///
+						!inlist(start_month,${surveyMonths}) | ///
+						(starttime < endtime)
+			
+			count
+			if r(N) != 0 {
+				
+				* Prepare for exporting
+				sort 	$enumeratorVar $dateVar
+				gen 	issue = "Inaccurate device date"
+				keep 	${issuesVarList} deviceid starttime endtime			
+				order 	${issuesVarList} deviceid starttime endtime
+			
+				* Save separate reports for each team, if that option was selected
+				* ================================================================
+				if $teams {
+				
+					* Save tempfile for loop
+					* ----------------------
+					tempfile wrong_dates
+					save	 `wrong_dates'
+				
+					* Loop through teams
+					* ------------------
+					foreach team of global teamsList {
 
+						use `wrong_dates',clear
+						count if $teamVar == `team'
+						 
+						if r(N) != 0 {
+						
+							* Display message confirming lack of consent
+							* ------------------------------------------
+							noi display as error "{phang}Team `team' has `r(N)' surveys inaccurate dates.{p_end}"
+						
+							* Put observations in issues report
+							* ---------------------------------
+							keep if $teamVar == `team'
+							
+							* Check if issues report already exists
+							capture confirm file "$HFC/Output/Raw files/issues_team`team'.dta" 
+							
+							* If it does, append the new existing info
+							if _rc {
+								append using "$HFC/Output/Raw files/issues_team`team'.dta"
+								duplicates drop
+							}
+							
+							* Save updated report
+							save "$HFC/Output/Raw files/issues_team`team'.dta", replace
+							
+						}	
+					}
+				}
+					
+				* Save single file if team option wasn't selected
+				* ===============================================
+				else {
+					
+					* Display message confirming lack of consent
+					noi display as error "{phang}There are `r(N)' surveys with inaccurate dates.{p_end}"
+							
+					* Check if issues report already exists
+					capture confirm file "$output/Raw files/issues.dta" 
+					
+					* If it does, append the new existing info
+					if !_rc {
+						append using "$output/Raw files/issues.dta"
+						duplicates drop
+					}
+
+					* Save updated report
+					save "$HFC/Output/Raw files/issues.dta", replace
+					
+				}
+			}
+		restore
+	}
+		
+	
 ********************************************************************************
 *	PART 1: Share of variables with all missing observations per section
 *******************************************************************************/

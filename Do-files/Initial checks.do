@@ -41,7 +41,11 @@
 * 						PART 1: Check for duplicates
 ********************************************************************************
 	
-	if $duplicates {
+* -----------------------------------------------------------------------------*
+* 							1.1 Duplicated IDs
+* -----------------------------------------------------------------------------*
+	
+	if $dup_ids {
 	
 		* If a team variable was defined, we'll create one report per team
 		if $teams {
@@ -67,6 +71,96 @@
 							uniquevars($keyVar) ///
 							keepvars($dateVar $startVar $endVar $enumeratorVar)
 		}
+	}
+	
+* -----------------------------------------------------------------------------*
+* 						1.2 Duplicated times and dates
+* -----------------------------------------------------------------------------*
+
+	if $dup_times {
+	
+		preserve
+			* Check if there are duplicated surveys
+			* =====================================
+			duplicates 	$startVars, generate(dup_date)
+			count if dup_date > 0
+			
+			* If there are, identify them
+			* ===========================
+			if r(N) != 0 {
+			
+				keep if		dup_date > 0
+				
+				* Prepare for exporting
+				sort 	$enumeratorVar $dateVar $startVars
+				gen 	issue = "Different IDs with duplicated times and dates"
+				keep 	${issuesVarList} deviceid ${startVars}					
+				order 	${issuesVarList} deviceid ${startVars}
+			
+				* Save separate reports for each team, if that option was selected
+				* ================================================================
+				if $teams {
+				
+					* Save tempfile for loop
+					* ----------------------
+					tempfile duplicated_dates
+					save	 `duplicated_dates'
+				
+					* Loop through teams
+					* ------------------
+					foreach team of global teamsList {
+
+						use `duplicated_dates',clear
+						count if $teamVar == `team'
+						 
+						if r(N) != 0 {
+						
+							* Display message confirming lack of consent
+							* ------------------------------------------
+							noi display as error "{phang}Team `team' has `r(N)' surveys with duplicated start times.{p_end}"
+						
+							* Put observations in issues report
+							* ---------------------------------
+							keep if $teamVar == `team'
+							
+							* Check if issues report already exists
+							capture confirm file "$HFC/Output/Raw files/issues_team`team'.dta" 
+							
+							* If it does, append the new existing info
+							if _rc {
+								append using "$HFC/Output/Raw files/issues_team`team'.dta"
+								duplicates drop
+							}
+							
+							* Save updated report
+							save "$HFC/Output/Raw files/issues_team`team'.dta", replace
+							
+						}	
+					}
+				}
+					
+				* Save single file if team option wasn't selected
+				* ===============================================
+				else {
+					
+					* Display message confirming lack of consent
+					noi display as error "{phang}There are `r(N)' surveys with duplicated start times.{p_end}"
+							
+					* Check if issues report already exists
+					capture confirm file "$output/Raw files/issues.dta" 
+					
+					* If it does, append the new existing info
+					if !_rc {
+						append using "$output/Raw files/issues.dta"
+						duplicates drop
+					}
+
+					* Save updated report
+					save "$HFC/Output/Raw files/issues.dta", replace
+					
+				}
+			}
+		restore
 	}
 	
 ********************************************************************************
