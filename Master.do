@@ -4,12 +4,21 @@
 *   							   2017										   *
 ********************************************************************************
 	
+			0. BEFORE RUNNING THE CHECKS:
+				0.1 Import the data from Survey CTO
+				0.2 Create a variable stamping the import date
+				0.3 Ensure that text fields are always imported as strings, 
+					with "" for missing values. Note that we treat "calculate" 
+					fields as text -- you can destring later if you wish
+				0.4 Edit the format do-file so that all variables are in a 
+					format consistent with these checks
 	
 			1.	INITIAL CHECKS
 				
 				1.1 Check for duplicates
-				1.2 Check for consent
-				1.3 Check progress (number of completed surveys per interest group)
+				1.2 Check number of incomplete interviews
+				1.3 Check for consent
+				1.4 Check progress (number of completed surveys per interest group)
 	
 			2.	ENUMERATORS CHECKS
 				
@@ -43,14 +52,8 @@
 * 							Set initial configurations
 *******************************************************************************/
 
-	*ssc install bcstats, replace
-	*ssc install ietoolkit, replace
-	*ssc install labmask, replace
-	
 	ieboilstart, version(14.0)
 	`r(version)'
-	
-
 
 ********************************************************************************
 * 								Set folder paths
@@ -58,10 +61,11 @@
 	
 	* Set file path
 	if "`c(username)'" == "wb501238" {
-		global HFC 		"C:\Users\WB501238\Dropbox\RFR HFC Luiza"
+		global HFC 		"C:\Users\WB501238\Documents\GitHub\HFC"
 	}	
 	
-	global logbook	"$HFC/Logbook.16th Oct 2017.xlsx"
+	global logbook	"$HFC/Logbooks"
+	global raw		"$HFC/Raw data"
 	global output	"$HFC/Output"
 	global dofiles	"$HFC/Do-files"
 
@@ -70,41 +74,77 @@
 *								PART 0: Set options
 ********************************************************************************
 
+	* Install packages: only need to be run once
+	local install_packages 	0
+	
+	* Observations to be checked:
+	* --------------------------
+	global completeOnly		1													// Check only observations for complete interviews
+	global allObs			0													// Make it one if checks should run on all observations
+	global lastDay			1													// If you want the checks to run only on observations submitted
+	global lastDayChecked	0													// If you want the checks to run on observations submitted from a specific day onwardsm add tC value of that day here
+	
+
 *-------------------------------------------------------------------------------
 *							INITIAL CHECKS
 *-------------------------------------------------------------------------------
 	
-	* Identify duplicated surveys. Creates one excel with duplicates reports per
-	* team of enumerators. To make it one single report, edit PART 1 of Initial 
-	* checks.do
-	global	duplicates		1	
+	/* Identify duplicated IDs
+	   -----------------------
+	Creates an excel file with duplicated ID reports, or one excel file per team of 
+	enumerators, if teamVar is defined, and removes duplicated ID observations
+	
+	Requires the following globals to be defined: 
+	$idVar $dateVar $startVar $endVar $keyVar $enumeratorVar */	
+	global	dup_ids			0
+	
+	/* Identify duplicated surveys
+	   ---------------------------
+	Some surveyors might send a form, reopen it and change the respondent ID only
+	Use variables that record the starting date and time for each module. 
+	in the programming you should have a field calculate_here that record the exact time
+	when starting each module of the questionnaire
+	
+	Requires the following globals to be defined: 
+	$idVar $dateVar $startVar $endVar $keyVar $enumeratorVar issuesVarList */	
+	global 	dup_times		0													// Some surveyors might send a form, reopen it and change the respondent ID only
 		
+	/* Check how many interviews were not finished
+	   -------------------------------------------
+	Requires the following globals to be defined: $completeVar	
+	Optinal globals: $teamVar $progresVars */
+	global  finished		0
+	
 	* Check for survey consent. Throws a warning and lists any households that
 	* were interviewed without consent
-	global 	consent			1
+	global 	consent			0
 		
-	* Count number of surveys completed per key variables
-	global 	progress		1
+	/* Count number of surveys completed per key variables
+	   ---------------------------------------------------
+	Requires the following globals to be defined: 	$progressVars $completeVar 
+	Optional: create varname_goal, a numeric variable with the intended number of observations for each group of each variable in progressVars*/
+	global 	progress		0
 
 	* Check server and logbook entries
 	local 	logbook			0
+	
+	
 	
 *-------------------------------------------------------------------------------
 *							ENUMERATORS CHECKS
 *-------------------------------------------------------------------------------
 	
-	* Export a list of all households submitted by each enumerator. Default is to
-	* export to latex. To change to excel, edit PART 1 of Enumerator checks.do
-	global	enum_ids		1	
+	* Export a list of all households submitted by each enumerator
+	global	enum_ids		0	
 		
 	* Count number of households approached and surveyed per enumerator
-	global 	enum_count		1
+	global 	enum_count		0
 		
 	* Count number of surveys completed per enumerator
-	global 	enum_finish		1
+	global 	enum_finish		0
 		
 	* Check duration of key sections per enumerator
-	global 	enum_duration	1
+	global 	enum_duration	0
 		
 	* Check share of don't knows and refusals to answer per enumerator
 	global	enum_ref		1
@@ -113,11 +153,19 @@
 *							SURVEY CHECKS
 *-------------------------------------------------------------------------------
 
+	/* Check if there are any devices with inaccurate dates setting
+	   ------------------------------------------------------------
+	This may create problems in different checks  
+	   
+	Requires the following globals to be defined: 	$progressVars $completeVar 
+	Optional: create varname_goal, a numeric variable with the intended number of observations for each group of each variable in progressVars*/
+	global 	progress		0
+	
 	* Calculate share of variables with all missing observations per section
-	global survey_section	1
+	global survey_section	0
 	
 	* Identify variables that only have missing variables
-	global survey_missvar	1
+	global survey_missvar	0
 	
 	* Check variables that should never be missing
 	global survey_nomiss	0
@@ -136,8 +184,10 @@
 *							BASIC CHECKS
 *-------------------------------------------------------------------------------
 
-	* Identify unique ID
-	global hhVar 	hhid	// household ID
+	* Identify observations
+	global idVar 			hhid					// Uniquely identifying variable
+	global locationVars		district_id village_id	// District, village, school, etc
+	global startVars		start_mod*
 	
 	* Define date variable
 	global dateVar			submissiondate			// Date of survey submission
@@ -149,13 +199,18 @@
 	global lowerPctile 		20						// Lower tail: choose 0 to not flag any lower tails
 	global upperPctile		80						// Upper tail: choose 100 to not flag any upper tails
 	
+	* List variables to be displayed in the issues report. They will be displayed
+	* in the same order as below. Add any other variables you want to be displayed
+	* to the following line
+	global issuesVarList 	issue idStr $locationVars $enumeratorVar dateStr startStr endStr $keyVar
+	
 	
 *-------------------------------------------------------------------------------
 *							ENUMERATOR CHECKS
 *-------------------------------------------------------------------------------
 
-	global teamVar 			id_04 					// ID for team of enumerators. Must be a labeled factor variable
-	global enumeratorVar	id_03					// ID for enumerators. Must be a lebeled factor variable
+	global teamVar 			""						// ID for team of enumerators
+	global enumeratorVar	id_03					// ID for enumerators
 	
 	global consentVar		consent					// Variable that indicates if HH consented to being surveyed
 	global consentYesVar	consent_yes				// Equals one if household consented to survey
@@ -170,25 +225,18 @@
 *							PROGRESS CHECKS
 *-------------------------------------------------------------------------------
 
-	global progressVars		"village_id district_id"	// List the names of all categories across which you want to check survey progress, e.g., village, district, gender. Listed variables must be labeled factors
+	global progressVars		village_id district_id	// List the names of all categories across which you want to check survey progress, e.g., village, district, gender.
 	
 	* Observation goals
 	gen village_id_goal = 15
-
-	gen district_id_goal = .	
-	replace district_id_goal = 240 if pl_id_09 == "BUGESERA"
-	replace district_id_goal = 238 if pl_id_09 == "HUYE"
-	replace district_id_goal = 80  if pl_id_09 == "MUHANGA"
-	replace district_id_goal = 279 if pl_id_09 == "NGOMA"
-	replace district_id_goal = 274 if pl_id_09 == "NGORORERO"
-	replace district_id_goal = 240 if pl_id_09 == "RULINDO"
-	replace district_id_goal = 680 if pl_id_09 == "RUBAVU"
 
 	
 *-------------------------------------------------------------------------------
 *							SURVEY CHECKS
 *-------------------------------------------------------------------------------
 
+	global surveyYear		2017
+	global surveyMonths		1 // 9,10,11
 	global hhRoster1		ros_
 	global hhRoster2		b_
 	global plotRoster		c_
@@ -203,45 +251,36 @@
 	
 	global outliersVarList	// Lit of variables to check for outliers
 	
-********************************************************************************
-* 							Calculate inputs
-********************************************************************************
-	
-	levelsof ${teamVar}, local(teamsList)
-	global teamsList = "`teamsList'"
-	
-	* Identify last submission date
-	qui sum $dateVar
-	global lastDay = dofc(r(max))
 	
 
-********************************************************************************
-*				Check that all necessary globals are defined
-********************************************************************************
-
-
-********************************************************************************
-*		If you have a do file adapting your data to the required formats,
-* 		run it here
-********************************************************************************
-	
 ********************************************************************************
 *								Run checks
 ********************************************************************************
 
-	if	$duplicates + $consent + $progress >= 1 {
-		do "$dofiles/Survey checks.do"
+	if `install_packages' {
+		ssc install bcstats, replace
+		ssc install ietoolkit, replace
+		ssc install labutil, replace
 	}
 	
-	if `logbook' {
-		do "$dofiles/Server_vs_logbook.do"
+	qui do "$dofiles/Change formats.do"
+	qui do "$dofiles/Calculate inputs.do"
+	qui do "$dofiles/Initial checks.do"
+	
+	if `logbook' qui do "$dofiles/Server_vs_logbook.do"
+	
+	qui do "$dofiles/Enumerator checks.do"
+	qui do "$dofiles/Survey checks.do"
+	
+	
+********************************************************************************
+*								Export results
+********************************************************************************
+
+	capture confirm file "$output/Raw files/issues.dta" 
+	if !_rc {
+		use "$output/Raw files/issues.dta", clear
+		export excel using "$output\Final documents\Issues report.xls", firstrow(varlabels) replace
+		erase "$output/Raw files/issues.dta"
 	}
 	
-	if 	$enum_ids + $enum_count + $enum_finish + $enum_ref + $enum_duration >= 1 {
-		do "$dofiles/Enumerator checks.do"
-	}
-	
-	if 	$survey_section + $survey_missvar + $surver_nomiss + ///
-		$survey_other + $survey_outliers {
-		do "$dofiles/Survey checks.do"
-	}
