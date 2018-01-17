@@ -7,7 +7,6 @@
 					PART 3: Total number of surveys completed by enumerator
 					PART 4: Average survey duration by enumerator
 					PART 5: Share of don't knows and refusals
-					-> PART 6: Check the percentage giving each answer for key filter questions 
 					
 	** WRITEN BY:   Luiza Andrade [lcardosodeandrad@worldbank.org]
 

@@ -10,7 +10,8 @@
 				0.3 Ensure that text fields are always imported as strings, 
 					with "" for missing values. Note that we treat "calculate" 
 					fields as text -- you can destring later if you wish
-				0.4 Edit the format do-file so that all variables are in a 
+				0.4 Edit the file path to the raw data in line XXX
+				0.4 Edit "Change formats" do-file so that all variables are in a 
 					format consistent with these checks
 	
 			1.	INITIAL CHECKS
@@ -19,6 +20,10 @@
 				1.2 Check number of incomplete interviews
 				1.3 Check for consent
 				1.4 Check progress (number of completed surveys per interest group)
+					Create server logbook 
+					Match server and field logbooks
+					Check if date settings on the tablets are accurate
+					
 	
 			2.	ENUMERATORS CHECKS
 				
@@ -27,26 +32,27 @@
 				2.3 Total number of surveys completed by enumerator
 				2.4 Average survey duration by enumerator
 				2.5 Share of don't knows and refusals
-				-> 2.6 Check the percentage giving each answer for key filter questions 
-				-> 2.7 Average skips
-				-> 2.8 Check the duration of consent by enumerator		
+					Check the percentage of obs giving each answer for key filter questions
+					Average skips by enumerator
 					
-			3.	ENUMERATORS CHECKS
+			3.	SURVEY CHECKS
 				
-				3.1 Check skip patterns
+				3.1 Share of variables with all missing observations per section
 				3.2 Identify variables that only contain missing values
 				3.3 Check variables that should never be missing
 				3.4 Check other values to recategorize
-				3.5 Check key variables for outliers
-				-> 3.6 Check variables constraints
-				-> 3.7 Check survey logic 
+				3.5 Check key variables for outliers 
+					Check that no variable has only a single value
+					Check survey logic/internal consistency	- Needs to be survey specific
+					Check variables constraints
+					Check if rosters opened
+					Check number of roster observations
 			
-			4. BACK CHECKS
+			BACK CHECKS
 				
-				-> 4.1 Select back checks sample
-				-> 4.2 Run bcstats
-	
-
+				Select back check sample
+				Run bcstats
+				
 	
 ********************************************************************************
 * 							Set initial configurations
@@ -79,10 +85,10 @@
 	
 	* Observations to be checked:
 	* --------------------------
-	global completeOnly		1													// Check only observations for complete interviews
+	global completeOnly		1													// Check only observations with completed interviews
 	global allObs			0													// Make it one if checks should run on all observations
 	global lastDay			1													// If you want the checks to run only on observations submitted
-	global lastDayChecked	0													// If you want the checks to run on observations submitted from a specific day onwardsm add tC value of that day here
+	global lastDayChecked	0													// If you want the checks to run on observations submitted from a specific day onwards add tC value of that day here
 	
 
 *-------------------------------------------------------------------------------
@@ -124,10 +130,6 @@
 	Requires the following globals to be defined: 	$progressVars $completeVar 
 	Optional: create varname_goal, a numeric variable with the intended number of observations for each group of each variable in progressVars*/
 	global 	progress		0
-
-	* Check server and logbook entries
-	local 	logbook			0
-	
 	
 	
 *-------------------------------------------------------------------------------
@@ -216,7 +218,7 @@
 	global consentYesVar	consent_yes				// Equals one if household consented to survey
 	global completeVar		complete				// Equals on if survey was completed
 	
-	global durationList		duration				// List the names of all duration variables to be checked
+	global durationList		duration				// List the names of all duration variables to be checked. We suggest including duration of consent 
 	
 	global dkCode			-88						// Code for "don't know"
 	global refCode			-66						// Code for "refuse to answer"
@@ -263,12 +265,11 @@
 		ssc install labutil, replace
 	}
 	
+	use "$raw/data.dta", clear													// Load your raw data here
+	
 	qui do "$dofiles/Change formats.do"
 	qui do "$dofiles/Calculate inputs.do"
 	qui do "$dofiles/Initial checks.do"
-	
-	if `logbook' qui do "$dofiles/Server_vs_logbook.do"
-	
 	qui do "$dofiles/Enumerator checks.do"
 	qui do "$dofiles/Survey checks.do"
 	

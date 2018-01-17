@@ -19,11 +19,6 @@
 	if $dup_times {
 	
 		preserve
-			
-			**** Check if submissiondate is a date variable
-			**** Check if submissiondate is td
-			**** gen start_year = year(td_date)
-			**** gen start_month = month(td_date)
 		
 			keep if 	!inlist(start_year,${surveyYears}) | ///
 						!inlist(start_month,${surveyMonths}) | ///
@@ -206,20 +201,7 @@
 			
 			export excel using "$output\Raw files\allmiss.xls", sheetreplace firstrow(variables)
 
-			*dataout, save("$output/Raw files/delete_me1") tex mid(1) replace
-			
-			*filefilter 	"$output/Raw files/delete_me1.tex" "$output/Raw files/delete_me2.tex", 	///
-			*			from("_") to("\BS_") ///
-			*			replace			
-			*filefilter 	"$output/Raw files/delete_me2.tex" "$output/Raw files/delete_me1.tex", 	///
-			*			from("\BS\BS_") to("\BS_") ///
-			*			replace
-			*filefilter 	"$output/Raw files/delete_me1.tex" "$output/Raw files/allmiss.tex", 	///
-			*			from("documentclass[]{article}") to("documentclass[border=1em]{standalone}") ///
-			*			replace
-			*erase		"$output/Raw files/delete_me1.tex"
-			*erase		"$output/Raw files/delete_me2.tex"
-			
+		
 		restore 
 	}	
 
@@ -303,7 +285,7 @@
 ********************************************************************************
 
 	if $survey_outliers {
-		foreach outliersVar of local outliersVarList {
+		foreach outliersVar of global outliersVarList {
 		
 			sum `outliersVar', detail
 		

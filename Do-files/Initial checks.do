@@ -2,7 +2,7 @@
 *   					  SURVEY HIGH FREQUENCY CHECKS						   *
 ********************************************************************************
 	
-	** OUTLINE:		PART 1: Check for duplicates
+	** OUTLINE:		PART 1: Check for duplicates 
 					PART 2: Check number of incomplete interviews
 					PART 3: Check for consent
 					PART 4: Check progress (number of completed surveys per interest group)
@@ -400,3 +400,4 @@
 			restore 
 		}
 	}
+	
