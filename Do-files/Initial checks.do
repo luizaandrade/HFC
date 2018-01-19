@@ -82,7 +82,7 @@
 		preserve
 			* Check if there are duplicated surveys
 			* =====================================
-			duplicates 	$startVars, generate(dup_date)
+			duplicates tag $startVars, generate(dup_date)
 			count if dup_date > 0
 			
 			* If there are, identify them
