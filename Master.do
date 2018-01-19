@@ -90,6 +90,9 @@
 	global lastDay			1													// If you want the checks to run only on observations submitted
 	global lastDayChecked	0													// If you want the checks to run on observations submitted from a specific day onwards add tC value of that day here
 	
+	* Initial configurations:
+	* --------------------------
+	global teams			0													// Make it one if you'd like to run stats by teams of enumerators
 
 *-------------------------------------------------------------------------------
 *							INITIAL CHECKS
