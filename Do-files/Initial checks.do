@@ -167,14 +167,16 @@
 *				PART 2: Count number of unfinished surveys
 *******************************************************************************/
 
-	if $finished {		
-		* Check any interviews were not finished 
-		qui count if $completeVar != 1
-		
-		if r(N) != 0 {
 			
-		noi display as error "{phang} There are `r(N)' incomplete interviews.{p_end}"	
-						
+	* Check any interviews were not finished 
+	qui count if $completeVar != 1
+	
+	if r(N) != 0 {
+		
+	noi display as error "{phang} There are `r(N)' incomplete interviews.{p_end}"	
+			
+		if $finished {
+			
 			preserve 
 				
 				keep if $completeVar != 1
@@ -220,13 +222,12 @@
 				}
 			restore
 		}
+	}
 	
 	
-	
-		* Drop incomplete observations
-		if $completeOnly {
-			drop if $completeVar != 1
-		}
+	* Drop incomplete observations
+	if $completeOnly {
+		drop if $completeVar != 1
 	}
 
 
