@@ -109,9 +109,9 @@
 					43 "Enumerator 43" ///
 					44 "Enumerator 44" ///
 					45 "Enumerator 45" ///
-					46 "Enumerator 4" ///
-					47 "Enumerator 4" ///
-					48 "Enumerator 84", replace
+					46 "Enumerator 46" ///
+					47 "Enumerator 47" ///
+					48 "Enumerator 48", replace
 					
 					
 						* Observation goals
